@@ -1,0 +1,778 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Scheme A — Solana ↔ Sui (rsUSDP) — v6</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: #0a0e1a; color: #e0e6ed; min-height: 100vh; padding: 32px 24px;
+  }
+  h1 { text-align: center; font-size: 24px; font-weight: 700; margin-bottom: 6px; color: #67e8f9; }
+  .subtitle { text-align: center; color: #64748b; font-size: 13px; margin-bottom: 10px; }
+  .version-tag { text-align: center; margin-bottom: 28px; }
+  .version-tag span { background: rgba(78,205,252,0.15); color: #67e8f9; padding: 3px 12px; border-radius: 12px; font-size: 11px; font-weight: 600; }
+
+  /* Decisions */
+  .decisions { max-width: 1060px; margin: 0 auto 28px; display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  .dc { background: rgba(16,185,129,0.06); border: 1px solid rgba(16,185,129,0.2); border-radius: 10px; padding: 10px 14px; flex: 1 1 180px; max-width: 240px; }
+  .dc-l { font-size: 10px; font-weight: 700; color: #6ee7b7; text-transform: uppercase; letter-spacing: .5px; margin-bottom: 3px; }
+  .dc-v { font-size: 13px; font-weight: 600; }
+  .dc-n { font-size: 11px; color: #64748b; margin-top: 2px; }
+
+  .canvas { max-width: 1060px; margin: 0 auto; }
+
+  /* Layers */
+  .layer { position: relative; border-radius: 14px; padding: 20px; margin-bottom: 18px; }
+  .layer-sol { background: rgba(153,69,255,0.05); border: 1px solid rgba(153,69,255,0.18); }
+  .layer-op { background: rgba(251,191,36,0.03); border: 1px dashed rgba(251,191,36,0.2); }
+  .layer-sui { background: rgba(78,205,252,0.05); border: 1px solid rgba(78,205,252,0.18); }
+  .layer-tag { position: absolute; top: -11px; left: 20px; padding: 2px 12px; border-radius: 16px; font-size: 11px; font-weight: 600; }
+  .layer-sol .layer-tag { background: #9945ff; color: #fff; }
+  .layer-op .layer-tag { background: #f59e0b; color: #1a1a2e; }
+  .layer-sui .layer-tag { background: #4ecdfb; color: #0a0e1a; }
+
+  .hflow { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; justify-content: center; }
+
+  /* Node */
+  .nd { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); border-radius: 11px; padding: 14px 18px; text-align: center; min-width: 160px; transition: all 0.2s; }
+  .nd:hover { background: rgba(255,255,255,0.07); transform: translateY(-1px); box-shadow: 0 6px 20px rgba(0,0,0,0.25); }
+  .nd-t { font-weight: 700; font-size: 14px; margin-bottom: 5px; }
+  .nd-d { font-size: 11px; color: #94a3b8; line-height: 1.5; }
+  .nd-icon { font-size: 26px; margin-bottom: 6px; }
+
+  .nd-user { border-color: rgba(16,185,129,0.4); } .nd-user .nd-t { color: #6ee7b7; }
+  .nd-prog { border-color: rgba(153,69,255,0.4); } .nd-prog .nd-t { color: #c084fc; }
+  .nd-op { border-color: rgba(251,191,36,0.4); background: rgba(251,191,36,0.05); } .nd-op .nd-t { color: #fbbf24; }
+  .nd-pool { border-color: rgba(244,114,182,0.4); } .nd-pool .nd-t { color: #f9a8d4; }
+  .nd-vault { border-color: rgba(78,205,252,0.5); } .nd-vault .nd-t { color: #67e8f9; }
+
+  .arr { color: #475569; font-size: 20px; flex-shrink: 0; }
+  .arr-lbl { font-size: 10px; color: #64748b; text-align: center; line-height: 1.3; max-width: 100px; }
+  .arr-grp { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+
+  .bg { display: inline-block; padding: 2px 7px; border-radius: 4px; font-size: 10px; font-weight: 600; }
+  .bg-new { background: rgba(16,185,129,0.2); color: #6ee7b7; }
+  .bg-exist { background: rgba(148,163,184,0.2); color: #94a3b8; }
+  .bg-rec { background: rgba(251,191,36,0.2); color: #fcd34d; }
+
+  .sn { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; border-radius: 50%; background: rgba(255,255,255,0.1); font-size: 10px; font-weight: 700; color: #94a3b8; margin-right: 3px; }
+
+  .pd { background: rgba(0,0,0,0.35); border-radius: 8px; padding: 12px; margin-top: 8px; text-align: left; }
+  .pd-r { display: flex; justify-content: space-between; padding: 2px 0; font-size: 11px; border-bottom: 1px solid rgba(255,255,255,0.03); }
+  .pd-l { color: #64748b; } .pd-v { color: #e0e6ed; font-weight: 500; }
+
+  /* Sections */
+  .sec { max-width: 1060px; margin: 32px auto 0; padding: 22px; border-radius: 16px; }
+  .sec h2 { font-size: 17px; margin-bottom: 16px; }
+  .sec-sui { background: rgba(78,205,252,0.03); border: 1px solid rgba(78,205,252,0.12); }
+  .sec-sui h2 { color: #67e8f9; }
+  .sec-warn { background: rgba(251,191,36,0.03); border: 1px solid rgba(251,191,36,0.15); }
+  .sec-warn h2 { color: #fbbf24; }
+  .sec-purple { background: rgba(153,69,255,0.04); border: 1px solid rgba(153,69,255,0.15); }
+  .sec-purple h2 { color: #c084fc; }
+  .sec-red { background: rgba(239,68,68,0.04); border: 1px solid rgba(239,68,68,0.15); }
+  .sec-red h2 { color: #f87171; }
+  .sec-green { background: rgba(16,185,129,0.04); border: 1px solid rgba(16,185,129,0.15); }
+  .sec-green h2 { color: #6ee7b7; }
+
+  /* Timeline */
+  .timeline { position: relative; padding-left: 28px; }
+  .timeline::before { content: ''; position: absolute; left: 10px; top: 4px; bottom: 4px; width: 2px; background: rgba(78,205,252,0.15); border-radius: 2px; }
+  .tl-step { position: relative; margin-bottom: 14px; padding: 10px 14px; background: rgba(0,0,0,0.25); border-radius: 10px; border: 1px solid rgba(255,255,255,0.04); }
+  .tl-step::before {
+    content: attr(data-step); position: absolute; left: -28px; top: 12px;
+    width: 20px; height: 20px; border-radius: 50%; font-size: 10px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .tl-sol::before { background: #9945ff; color: #fff; }
+  .tl-bridge::before { background: #f59e0b; color: #1a1a2e; }
+  .tl-sui::before { background: #4ecdfb; color: #0a0e1a; }
+  .tl-err::before { background: #ef4444; color: #fff; }
+  .tl-title { font-size: 13px; font-weight: 600; margin-bottom: 3px; }
+  .tl-sol .tl-title { color: #c084fc; }
+  .tl-bridge .tl-title { color: #fcd34d; }
+  .tl-sui .tl-title { color: #67e8f9; }
+  .tl-err .tl-title { color: #f87171; }
+  .tl-desc { font-size: 11px; color: #94a3b8; line-height: 1.5; }
+  .tl-who { font-size: 10px; font-weight: 600; padding: 1px 6px; border-radius: 3px; margin-left: 6px; }
+  .tl-who-user { background: rgba(16,185,129,0.15); color: #6ee7b7; }
+  .tl-who-op { background: rgba(251,191,36,0.15); color: #fbbf24; }
+  .tl-who-auto { background: rgba(148,163,184,0.15); color: #94a3b8; }
+  .tl-note { margin-top: 6px; padding: 6px 10px; background: rgba(251,191,36,0.06); border-left: 2px solid #f59e0b; border-radius: 0 6px 6px 0; font-size: 11px; color: #fcd34d; }
+
+  /* State Machine */
+  .sm { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: center; margin: 12px 0; }
+  .sm-s { padding: 8px 14px; border-radius: 10px; font-size: 12px; font-weight: 600; text-align: center; min-width: 100px; }
+  .sm-arr { color: #475569; font-size: 16px; }
+  .sm-open { background: rgba(16,185,129,0.12); border: 1px solid rgba(16,185,129,0.3); color: #6ee7b7; }
+  .sm-frozen { background: rgba(251,191,36,0.12); border: 1px solid rgba(251,191,36,0.3); color: #fcd34d; }
+  .sm-bridging { background: rgba(78,205,252,0.12); border: 1px solid rgba(78,205,252,0.3); color: #67e8f9; }
+  .sm-settling { background: rgba(167,139,250,0.12); border: 1px solid rgba(167,139,250,0.3); color: #c4b5fd; }
+  .sm-settled { background: rgba(148,163,184,0.12); border: 1px solid rgba(148,163,184,0.3); color: #94a3b8; }
+  .sm-failed { background: rgba(239,68,68,0.12); border: 1px solid rgba(239,68,68,0.3); color: #f87171; }
+  .sm-sub { font-size: 10px; color: inherit; opacity: 0.7; display: block; margin-top: 2px; }
+
+  /* Data Table */
+  .dtable { width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 12px; }
+  .dtable th { background: rgba(255,255,255,0.05); text-align: left; padding: 8px 12px; font-weight: 600; font-size: 11px; color: #94a3b8; border-bottom: 1px solid rgba(255,255,255,0.08); }
+  .dtable td { padding: 8px 12px; border-bottom: 1px solid rgba(255,255,255,0.03); }
+  .dtable tr:hover td { background: rgba(255,255,255,0.02); }
+  .dtable code { background: rgba(0,0,0,0.3); padding: 1px 5px; border-radius: 3px; font-size: 11px; }
+
+  /* Info Box */
+  .ibox { background: rgba(0,0,0,0.3); border-radius: 10px; padding: 14px; margin: 10px 0; }
+  .ibox-t { font-size: 12px; font-weight: 600; margin-bottom: 6px; }
+  .ibox-d { font-size: 11px; color: #94a3b8; line-height: 1.6; }
+  .ibox-d code { background: rgba(255,255,255,0.06); padding: 1px 4px; border-radius: 3px; }
+
+  /* Code block */
+  .cblock { background: rgba(0,0,0,0.5); border-radius: 8px; padding: 14px; margin: 10px 0; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 11px; line-height: 1.6; color: #e0e6ed; overflow-x: auto; white-space: pre; }
+  .cblock .cm { color: #64748b; }
+  .cblock .kw { color: #c084fc; }
+  .cblock .ty { color: #67e8f9; }
+  .cblock .st { color: #6ee7b7; }
+  .cblock .nu { color: #fcd34d; }
+
+  /* Questions */
+  .qsec { max-width: 1060px; margin: 32px auto 0; padding: 20px; border-radius: 16px; background: rgba(78,205,252,0.03); border: 1px solid rgba(78,205,252,0.12); }
+  .qsec h3 { font-size: 16px; margin-bottom: 14px; color: #67e8f9; }
+  .qg { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .qc { background: rgba(0,0,0,0.3); border-radius: 9px; padding: 14px; border-left: 3px solid; }
+  .qc-h { border-color: #ef4444; } .qc-m { border-color: #f59e0b; } .qc-ok { border-color: #10b981; }
+  .qc-no { font-size: 10px; font-weight: 700; color: #64748b; margin-bottom: 4px; }
+  .qc-t { font-size: 13px; font-weight: 600; margin-bottom: 4px; }
+  .qc-d { font-size: 11px; color: #94a3b8; line-height: 1.5; }
+  .qtag { display: inline-block; padding: 1px 6px; border-radius: 3px; font-size: 9px; margin-top: 6px; margin-right: 4px; }
+  .qtag-a { background: rgba(167,139,250,0.2); color: #c4b5fd; }
+  .qtag-o { background: rgba(56,189,248,0.2); color: #7dd3fc; }
+  .qtag-d { background: rgba(16,185,129,0.2); color: #6ee7b7; }
+
+  @media (max-width: 800px) { .hflow { flex-direction: column; } .qg { grid-template-columns: 1fr; } .sm { flex-direction: column; } }
+</style>
+</head>
+<body>
+
+<h1>Scheme A — Solana ↔ Sui (rsUSDP Vault)</h1>
+<p class="subtitle">Paga users via Crossmint Solana wallet → Ledger Program A → Circle CCTP → TBook Sui Vault</p>
+<div class="version-tag"><span>v6 — 2026-03-01 · CCTP confirmed · Error handling · State machine · NAV protection · Permissionless · Zero protocol fee</span></div>
+
+<!-- ===== Key Decisions (Confirmed) ===== -->
+<div class="decisions">
+  <div class="dc"><div class="dc-l">User Signing</div><div class="dc-v">Manual Approve</div><div class="dc-n">Crossmint SDK popup confirmation</div></div>
+  <div class="dc"><div class="dc-l">Operator</div><div class="dc-v">Multisig Team</div><div class="dc-n">Separate multisig on Solana + Sui</div></div>
+  <div class="dc"><div class="dc-l">Target Vault</div><div class="dc-v">TBook Vault (Sui)</div><div class="dc-n">Existing contract, no modification</div></div>
+  <div class="dc"><div class="dc-l">Bridge</div><div class="dc-v">Circle CCTP</div><div class="dc-n">Permissionless · Zero fee · Native USDC</div></div>
+  <div class="dc"><div class="dc-l">Ledger</div><div class="dc-v">Program A (Independent)</div><div class="dc-n">Not shared with Program B</div></div>
+</div>
+
+<!-- ===== 1. Architecture Diagram ===== -->
+<div class="canvas">
+  <!-- L1: Solana -->
+  <div class="layer layer-sol">
+    <div class="layer-tag">SOLANA</div>
+    <div class="hflow">
+      <div class="nd nd-user" style="min-width:190px;">
+        <div class="nd-icon">👤</div>
+        <div class="nd-t">Paga User</div>
+        <div class="nd-d">Crossmint non-custodial wallet<br>Holds <strong style="color:#6ee7b7">Solana USDC</strong><br>Manually approves each transaction</div>
+      </div>
+      <div class="arr-grp"><div class="arr" style="font-size:26px;">→</div><div class="arr-lbl">deposit /<br>request_redeem /<br>claim / cancel</div></div>
+      <div class="nd nd-prog" style="flex:1; max-width: 440px;">
+        <div class="nd-t">Ledger Program A <span class="bg bg-new">NEW</span></div>
+        <div class="nd-d">
+          <strong>VaultMirror-A</strong> (global state) · <strong>UserAccount</strong> (per-user PDA) · <strong>SettleEpoch</strong> (per-cycle)<br>
+          Single Vault type · Tracks user shares in Sui Vault<br>
+          USDC locked in Program A's <code>usdc_vault</code> (PDA)
+        </div>
+        <div class="pd">
+          <div class="pd-r"><span class="pd-l">User instructions (no multisig)</span><span class="pd-v">deposit / request_redeem / claim / cancel_deposit</span></div>
+          <div class="pd-r"><span class="pd-l">Operator instructions (multisig)</span><span class="pd-v">freeze_epoch / confirm_deposit_settle / confirm_redeem_settle</span></div>
+          <div class="pd-r"><span class="pd-l">Emergency instructions (multisig)</span><span class="pd-v">rollback_epoch / set_pause</span></div>
+          <div class="pd-r"><span class="pd-l">Multisig config</span><span class="pd-v">Routine 2/3 · Emergency pause 1/3 · Config change 3/3</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- L2: Operator + Bridge -->
+  <div class="layer layer-op">
+    <div class="layer-tag">OPERATOR + BRIDGE</div>
+    <div class="hflow">
+      <div class="nd nd-op" style="flex:1; max-width: 420px;">
+        <div class="nd-t">Operator Multisig Team</div>
+        <div class="nd-d" style="text-align:left;">
+          <span class="sn">1</span> <strong>freeze_epoch</strong> — Freeze current Epoch, stop accepting new requests (Solana multisig)<br>
+          <span class="sn">2</span> <strong>Bridge USDC → Sui</strong> — Extract from usdc_vault → CCTP depositForBurn → Sui mint (Operator)<br>
+          <span class="sn">3</span> <strong>Sui operations</strong> — Pool address executes deposit / queue_redeem / claim (Sui multisig)<br>
+          <span class="sn">4</span> <strong>Wait for settle</strong> — Sui Vault Operator settle → shares confirmed<br>
+          <span class="sn">5</span> <strong>Bridge USDC ← Sui</strong> — Redeemed USDC → CCTP burn → Solana mint (if redeems exist)<br>
+          <span class="sn">6</span> <strong>confirm_settle</strong> — Write shares/USDC results back to Solana (Solana multisig)
+        </div>
+      </div>
+      <div class="arr-grp"><div class="arr" style="font-size:26px;">↔</div><div class="arr-lbl">Circle CCTP<br>burn / mint<br>Native USDC bidirectional</div></div>
+      <div class="nd" style="border-color: rgba(78,205,252,0.3); flex: 0 0 auto;">
+        <div class="nd-t" style="color:#fcd34d;">Circle CCTP</div>
+        <div class="nd-d">
+          Solana ↔ Sui Native USDC<br>
+          burn-on-source / mint-on-dest<br>
+          Permissionless · No registration<br>
+          Standard Transfer zero protocol fee<br>
+          Only gas on both chains (~$0.02)
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- L3: Sui -->
+  <div class="layer layer-sui">
+    <div class="layer-tag">SUI CHAIN</div>
+    <div class="hflow">
+      <div class="nd nd-pool" style="min-width: 220px;">
+        <div class="nd-t">Pool Address (Sui Multisig)</div>
+        <div class="nd-d">Represents all Solana users<br>Vault contract sees one "big user"<br>Reuses existing MultiSigPanel</div>
+      </div>
+      <div class="arr-grp"><div class="arr" style="font-size:26px;">↔</div><div class="arr-lbl">deposit /<br>queue_redeem /<br>claim</div></div>
+      <div class="nd nd-vault" style="flex:1; max-width: 420px;">
+        <div class="nd-icon">🏦</div>
+        <div class="nd-t">TBook Vault (Sui) <span class="bg bg-exist">EXISTING · No modification</span></div>
+        <div class="pd">
+          <div class="pd-r"><span class="pd-l">Underlying asset</span><span class="pd-v">rsUSDP</span></div>
+          <div class="pd-r"><span class="pd-l">Accepted token</span><span class="pd-v">Sui Native USDC (Circle issued)</span></div>
+          <div class="pd-r"><span class="pd-l">Settlement</span><span class="pd-v">On-chain T+N settle (Operator triggered)</span></div>
+          <div class="pd-r"><span class="pd-l">Whitelist</span><span class="pd-v">None</span></div>
+          <div class="pd-r"><span class="pd-l">Min deposit</span><span class="pd-v">No limit</span></div>
+          <div class="pd-r"><span class="pd-l">Share tracking</span><span class="pd-v">Internal contract Table</span></div>
+          <div class="pd-r"><span class="pd-l">User identity</span><span class="pd-v">ctx.sender() = Pool address</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 2. CCTP Bridge Details ===== -->
+<div class="sec sec-warn">
+  <h2>Circle CCTP Bridge Details</h2>
+  <table class="dtable">
+    <thead>
+      <tr><th style="width:25%;">Dimension</th><th style="width:75%;">Description</th></tr>
+    </thead>
+    <tbody>
+      <tr><td style="font-weight:600;">Protocol type</td><td><strong style="color:#6ee7b7;">Permissionless</strong> — Any developer can call on-chain contracts directly, no registration, approval, or KYC with Circle required</td></tr>
+      <tr><td style="font-weight:600;">Mechanism</td><td>Source chain <code>depositForBurn</code> burns USDC → Circle attestation service signs → Destination chain <code>receiveMessage</code> mints Native USDC</td></tr>
+      <tr><td style="font-weight:600;">USDC type</td><td style="color:#6ee7b7;">Sui Native USDC (Circle officially issued), directly compatible with TBook Vault</td></tr>
+      <tr><td style="font-weight:600;">Protocol fee</td><td><strong style="color:#6ee7b7;">Standard Transfer: Zero protocol fee</strong>, Circle charges nothing</td></tr>
+      <tr><td style="font-weight:600;">Actual cost</td><td>Only gas fees on both chains — Solana gas < $0.01 + Sui gas < $0.01 ≈ <strong>~$0.02 per cross-chain transfer</strong></td></tr>
+      <tr><td style="font-weight:600;">Settlement time</td><td>~20 min (waiting for source chain finality + attestation)</td></tr>
+      <tr><td style="font-weight:600;">Transfer limits</td><td>No per-transaction limit (only bounded by source chain USDC balance), no minimum</td></tr>
+      <tr><td style="font-weight:600;">Sui support</td><td>CCTP V1 live on Sui (Move contracts: MessageTransmitter + TokenMessengerMinter)</td></tr>
+    </tbody>
+  </table>
+  <div class="ibox">
+    <div class="ibox-t" style="color:#fcd34d;">V1 → V2 Migration Plan</div>
+    <div class="ibox-d">
+      · Currently using <strong>CCTP V1</strong>, already live on Sui<br>
+      · CCTP V2 support for Sui expected <strong>2026 H2</strong><br>
+      · V1 sunset begins <strong>2026-07-31</strong> → Must complete migration before this date<br>
+      · V2 new capabilities: <strong>Fast Transfer</strong> (sub-second settlement, with protocol fee) + <strong>Hooks</strong> (auto-execute contract calls after cross-chain transfer)<br>
+      · Recommendation: Abstract bridge logic in Ledger Program for easy hot-swap to V2
+    </div>
+  </div>
+  <div class="ibox">
+    <div class="ibox-t" style="color:#fcd34d;">Operator Cross-Chain Workflow</div>
+    <div class="ibox-d">
+      <strong>Solana → Sui (Deposit):</strong><br>
+      1. Operator calls Solana CCTP <code>depositForBurn(amount, sui_domain, pool_address)</code><br>
+      2. Solana USDC is burned, generating CCTP message + nonce<br>
+      3. Wait for Circle attestation service signature (~few minutes)<br>
+      4. Operator calls <code>receive_message(message, attestation)</code> on Sui side<br>
+      5. Sui Native USDC minted to pool address ✓<br><br>
+      <strong>Sui → Solana (Redeem):</strong><br>
+      1. Pool address on Sui calls <code>depositForBurn(amount, solana_domain, usdc_vault)</code><br>
+      2. Sui USDC is burned, wait for attestation<br>
+      3. Operator calls <code>receiveMessage</code> on Solana<br>
+      4. Solana USDC minted to Ledger Program's <code>usdc_vault</code> ✓
+    </div>
+  </div>
+</div>
+
+<!-- ===== 3. SettleEpoch State Machine ===== -->
+<div class="sec sec-purple">
+  <h2>SettleEpoch State Machine</h2>
+  <div class="sm">
+    <div class="sm-s sm-open">Open<span class="sm-sub">Accepting deposit/redeem</span></div>
+    <div class="sm-arr">→ freeze_epoch</div>
+    <div class="sm-s sm-frozen">Frozen<span class="sm-sub">Aggregating · No new requests</span></div>
+    <div class="sm-arr">→ Extract USDC</div>
+    <div class="sm-s sm-bridging">Bridging<span class="sm-sub">CCTP cross-chain in progress</span></div>
+    <div class="sm-arr">→ Sui operations</div>
+    <div class="sm-s sm-settling">Settling<span class="sm-sub">Waiting for Sui Vault settle</span></div>
+    <div class="sm-arr">→ confirm</div>
+    <div class="sm-s sm-settled">Settled<span class="sm-sub">Complete · Shares allocated</span></div>
+  </div>
+  <div style="text-align:center; margin: 8px 0; color:#64748b; font-size:11px;">── Error Path ──</div>
+  <div class="sm">
+    <div class="sm-s sm-frozen">Frozen</div>
+    <div class="sm-arr" style="color:#ef4444;">→ rollback_epoch</div>
+    <div class="sm-s sm-failed">Failed<span class="sm-sub">Funds returned to users</span></div>
+  </div>
+  <div class="sm">
+    <div class="sm-s sm-bridging">Bridging</div>
+    <div class="sm-arr" style="color:#ef4444;">→ rollback_epoch</div>
+    <div class="sm-s sm-failed">Failed<span class="sm-sub">Funds returned to users</span></div>
+  </div>
+
+  <div class="ibox">
+    <div class="ibox-t" style="color:#c084fc;">SettleEpoch Account Structure (Extended)</div>
+    <div class="cblock"><span class="cm">// PDA seeds: [b"epoch", vault_mirror.key, epoch_id.to_le_bytes()]</span>
+<span class="kw">pub struct</span> <span class="ty">SettleEpoch</span> {
+    <span class="kw">pub</span> epoch_id:             <span class="ty">u64</span>,
+    <span class="kw">pub</span> status:               <span class="ty">EpochStatus</span>,  <span class="cm">// Open | Frozen | Bridging | Settling | Settled | Failed</span>
+
+    <span class="cm">// Deposit aggregation</span>
+    <span class="kw">pub</span> total_deposit_usdc:   <span class="ty">u64</span>,
+    <span class="kw">pub</span> deposit_users:        <span class="ty">Vec&lt;Pubkey&gt;</span>,
+    <span class="kw">pub</span> total_shares_received:<span class="ty">u64</span>,       <span class="cm">// Filled in at confirm time</span>
+
+    <span class="cm">// Redeem aggregation</span>
+    <span class="kw">pub</span> total_redeem_shares:  <span class="ty">u64</span>,
+    <span class="kw">pub</span> redeem_users:         <span class="ty">Vec&lt;Pubkey&gt;</span>,
+    <span class="kw">pub</span> total_usdc_received:  <span class="ty">u64</span>,       <span class="cm">// Filled in at confirm time</span>
+
+    <span class="cm">// Cross-chain tracking</span>
+    <span class="kw">pub</span> bridge_tx_hash:       <span class="ty">Option&lt;[u8; 32]&gt;</span>, <span class="cm">// CCTP message hash</span>
+    <span class="kw">pub</span> bridge_nonce:         <span class="ty">Option&lt;u64&gt;</span>,     <span class="cm">// CCTP nonce</span>
+
+    <span class="cm">// Timestamps</span>
+    <span class="kw">pub</span> created_at:           <span class="ty">i64</span>,
+    <span class="kw">pub</span> frozen_at:            <span class="ty">Option&lt;i64&gt;</span>,
+    <span class="kw">pub</span> settled_at:           <span class="ty">Option&lt;i64&gt;</span>,
+}</div>
+  </div>
+</div>
+
+<!-- ===== 4. Deposit Flow ===== -->
+<div class="sec sec-sui">
+  <h2>Complete Deposit Flow</h2>
+  <div class="timeline">
+    <div class="tl-step tl-sol" data-step="1">
+      <div class="tl-title">User deposits USDC <span class="tl-who tl-who-user">User Action</span></div>
+      <div class="tl-desc">User selects rsUSDP product in Paga App → enters amount → Crossmint SDK pops up signing confirmation<br>
+        USDC transfers from user wallet to Ledger Program A's <code>usdc_vault</code> PDA<br>
+        Updates UserAccount.pending_deposit += amount, adds to current Epoch's deposit_users</div>
+      <div class="tl-note">User can call <code>cancel_deposit</code> before Epoch freeze to withdraw; USDC returned directly</div>
+    </div>
+    <div class="tl-step tl-sol" data-step="2">
+      <div class="tl-title">Operator: freeze_epoch <span class="tl-who tl-who-op">Solana Multisig 2/3</span></div>
+      <div class="tl-desc">Freeze current Epoch N → status Open → Frozen<br>
+        Records <code>total_deposit_usdc</code> and <code>total_redeem_shares</code><br>
+        Simultaneously creates new Epoch N+1 (Open) for subsequent users<br>
+        Records <code>frozen_at</code> timestamp</div>
+    </div>
+    <div class="tl-step tl-bridge" data-step="3">
+      <div class="tl-title">Operator: CCTP bridge USDC → Sui <span class="tl-who tl-who-op">Cross-chain Op</span></div>
+      <div class="tl-desc">Epoch status → Bridging<br>
+        Extract aggregated USDC from Solana <code>usdc_vault</code> → CCTP <code>depositForBurn</code> → Solana USDC burned<br>
+        Records <code>bridge_tx_hash</code> and <code>bridge_nonce</code><br>
+        Sui side: Circle attestation → <code>receiveMessage</code> → Sui Native USDC minted to pool address</div>
+      <div class="tl-note">CCTP settlement ~20 min; Operator must confirm USDC arrived on Sui before proceeding</div>
+    </div>
+    <div class="tl-step tl-sui" data-step="4">
+      <div class="tl-title">Operator: Sui Vault deposit <span class="tl-who tl-who-op">Sui Multisig</span></div>
+      <div class="tl-desc">Epoch status → Settling<br>
+        Pool address calls TBook Vault's <code>deposit(usdc_amount)</code></div>
+    </div>
+    <div class="tl-step tl-sui" data-step="5">
+      <div class="tl-title">Sui Vault: settle_deposits <span class="tl-who tl-who-auto">Sui Vault Operator</span></div>
+      <div class="tl-desc">Sui Vault Operator executes settle → pool address receives corresponding shares<br>
+        Example: deposit 3,500 USDC → deduct deposit fee → receive 3,300 shares<br>
+        Operator reads on-chain result: pool address share increment = <code>total_shares_received</code></div>
+      <div class="tl-note">NAV snapshot: Operator should record share_price = total_assets / total_shares at settle time for audit reconciliation</div>
+    </div>
+    <div class="tl-step tl-sol" data-step="6">
+      <div class="tl-title">Operator: confirm_deposit_settle <span class="tl-who tl-who-op">Solana Multisig 2/3</span></div>
+      <div class="tl-desc">Passes <code>(epoch_id, total_shares_received)</code><br>
+        Epoch status → Settled, records <code>settled_at</code><br>
+        <strong>Share allocation algorithm:</strong></div>
+      <div class="ibox" style="margin-top:8px;">
+        <div class="cblock"><span class="cm">// Pro-rata allocation, last user gets remainder (avoids rounding loss)</span>
+<span class="kw">let mut</span> remaining = total_shares_received;
+<span class="kw">for</span> (i, user) <span class="kw">in</span> epoch.deposit_users.iter().enumerate() {
+    <span class="kw">let</span> shares = <span class="kw">if</span> i == last_index {
+        remaining   <span class="cm">// Last user takes remainder to avoid rounding loss</span>
+    } <span class="kw">else</span> {
+        (user.pending_deposit * total_shares_received) / epoch.total_deposit_usdc
+    };
+    user.confirmed_shares += shares;
+    user.pending_deposit = <span class="nu">0</span>;
+    remaining -= shares;
+}</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 5. Redeem Flow ===== -->
+<div class="sec sec-sui">
+  <h2>Complete Redeem Flow</h2>
+  <div class="timeline">
+    <div class="tl-step tl-sol" data-step="1">
+      <div class="tl-title">User request_redeem <span class="tl-who tl-who-user">User Action</span></div>
+      <div class="tl-desc">Locks specified shares from <code>confirmed_shares</code> into <code>pending_redeem_shares</code><br>
+        Added to current Epoch's redeem_users list</div>
+      <div class="tl-note">User can call <code>cancel_redeem</code> before Epoch freeze (if supported); shares return to confirmed_shares</div>
+    </div>
+    <div class="tl-step tl-sol" data-step="2">
+      <div class="tl-title">Operator: freeze_epoch <span class="tl-who tl-who-op">Solana Multisig 2/3</span></div>
+      <div class="tl-desc">Freeze Epoch → Frozen, records <code>total_redeem_shares</code></div>
+    </div>
+    <div class="tl-step tl-sui" data-step="3">
+      <div class="tl-title">Operator: Sui queue_redeem <span class="tl-who tl-who-op">Sui Multisig</span></div>
+      <div class="tl-desc">Epoch → Settling<br>Pool address calls Vault's <code>queue_redeem(aggregated_shares)</code></div>
+    </div>
+    <div class="tl-step tl-sui" data-step="4">
+      <div class="tl-title">Sui Vault: settle_redeems → finalize <span class="tl-who tl-who-auto">Sui Vault Operator</span></div>
+      <div class="tl-desc">Vault settles redemption → calculates USDC corresponding to shares → pool address can claim</div>
+    </div>
+    <div class="tl-step tl-sui" data-step="5">
+      <div class="tl-title">Operator: Sui claim + CCTP bridge back to Solana <span class="tl-who tl-who-op">Sui Multisig + Cross-chain</span></div>
+      <div class="tl-desc">Pool address claims USDC → CCTP <code>depositForBurn</code> → Sui USDC burned<br>
+        Solana side mints native USDC → deposited into Ledger Program <code>usdc_vault</code><br>
+        Records bridge_tx_hash / bridge_nonce</div>
+    </div>
+    <div class="tl-step tl-sol" data-step="6">
+      <div class="tl-title">Operator: confirm_redeem_settle <span class="tl-who tl-who-op">Solana Multisig 2/3</span></div>
+      <div class="tl-desc">Passes <code>(epoch_id, total_usdc_received)</code><br>
+        Pro-rata allocation to each redeem user's <code>claimable_usdc</code>, clears <code>pending_redeem_shares</code><br>
+        Epoch → Settled</div>
+      <div class="ibox" style="margin-top:8px;">
+        <div class="cblock"><span class="cm">// Redeem USDC allocation — same last-user-gets-remainder pattern</span>
+<span class="kw">let mut</span> remaining = total_usdc_received;
+<span class="kw">for</span> (i, user) <span class="kw">in</span> epoch.redeem_users.iter().enumerate() {
+    <span class="kw">let</span> usdc = <span class="kw">if</span> i == last_index {
+        remaining
+    } <span class="kw">else</span> {
+        (user.pending_redeem_shares * total_usdc_received) / epoch.total_redeem_shares
+    };
+    user.claimable_usdc += usdc;
+    user.pending_redeem_shares = <span class="nu">0</span>;
+    remaining -= usdc;
+}</div>
+      </div>
+    </div>
+    <div class="tl-step tl-sol" data-step="7">
+      <div class="tl-title">User claim <span class="tl-who tl-who-user">User Action</span></div>
+      <div class="tl-desc">User calls claim → <code>claimable_usdc</code> USDC transfers from <code>usdc_vault</code> back to user's wallet<br>
+        Claim is instant, no Epoch wait required</div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 6. Error Handling / Rollback ===== -->
+<div class="sec sec-red">
+  <h2>Error Handling: rollback_epoch</h2>
+  <p style="font-size:12px; color:#94a3b8; margin-bottom: 14px;">When cross-chain bridging fails, Sui Vault encounters an error, or other unrecoverable issues occur, the Operator must roll back the Epoch and return funds to users.</p>
+
+  <div class="ibox">
+    <div class="ibox-t" style="color:#f87171;">Trigger Conditions</div>
+    <div class="ibox-d">
+      1. CCTP bridge failed — USDC remains in Solana usdc_vault (burn did not succeed)<br>
+      2. CCTP bridge succeeded but Sui operation failed — USDC reached Sui pool address but failed to deposit into Vault<br>
+      3. Sui Vault settle error — settle timeout or rejection<br>
+      4. Other situations where Operator determines rollback is necessary
+    </div>
+  </div>
+
+  <div class="ibox">
+    <div class="ibox-t" style="color:#f87171;">rollback_epoch Instruction Design</div>
+    <div class="cblock"><span class="cm">// Operator multisig (recommended 3/3 full sign)</span>
+<span class="kw">pub fn</span> <span class="ty">rollback_epoch</span>(
+    epoch_id: <span class="ty">u64</span>,
+    reason:   <span class="ty">String</span>,      <span class="cm">// Rollback reason (recorded on-chain for audit)</span>
+    refund_usdc: <span class="ty">u64</span>,     <span class="cm">// Actual USDC amount available for refund</span>
+) {
+    <span class="cm">// Precondition: Epoch status ∈ {Frozen, Bridging, Settling}</span>
+    <span class="cm">// Cannot roll back Open or already Settled Epochs</span>
+
+    <span class="cm">// Deposit scenario: Return user's pending_deposit USDC</span>
+    <span class="kw">for</span> user <span class="kw">in</span> epoch.deposit_users {
+        user.claimable_usdc += user.pending_deposit;  <span class="cm">// Move to claimable</span>
+        user.pending_deposit = <span class="nu">0</span>;
+    }
+    <span class="cm">// Redeem scenario: Return user's pending_redeem_shares</span>
+    <span class="kw">for</span> user <span class="kw">in</span> epoch.redeem_users {
+        user.confirmed_shares += user.pending_redeem_shares;  <span class="cm">// Shares restored</span>
+        user.pending_redeem_shares = <span class="nu">0</span>;
+    }
+    epoch.status = <span class="ty">EpochStatus::Failed</span>;
+}</div>
+  </div>
+
+  <table class="dtable">
+    <thead>
+      <tr><th>Scenario</th><th>Where is the USDC?</th><th>Impact on Deposit Users</th><th>Impact on Redeem Users</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Bridge not initiated</td>
+        <td>Still in Solana usdc_vault</td>
+        <td style="color:#6ee7b7;">USDC → claimable, user can claim and withdraw</td>
+        <td style="color:#6ee7b7;">Shares returned to confirmed_shares</td>
+      </tr>
+      <tr>
+        <td>Bridge reached Sui, Vault op failed</td>
+        <td>Sui pool address</td>
+        <td style="color:#fcd34d;">Operator must bridge USDC back first → then refund</td>
+        <td style="color:#6ee7b7;">Shares returned to confirmed_shares</td>
+      </tr>
+      <tr>
+        <td>Partial success</td>
+        <td>Split across both chains</td>
+        <td style="color:#f87171;">Operator manual reconciliation required, case-by-case</td>
+        <td style="color:#f87171;">Depends on specifics, may require manual handling</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ===== 7. NAV & Share Pricing ===== -->
+<div class="sec sec-green">
+  <h2>Share Pricing & NAV Audit Mechanism</h2>
+  <p style="font-size:12px; color:#94a3b8; margin-bottom:14px;">
+    The <code>total_shares_received</code> passed by the Operator during confirm_deposit_settle determines how many shares users receive. This value depends on the Sui Vault's NAV at the time. To prevent manipulation, a verification mechanism is needed.
+  </p>
+
+  <div class="ibox">
+    <div class="ibox-t" style="color:#6ee7b7;">Approach: Off-chain Audit + On-chain Constraints</div>
+    <div class="ibox-d">
+      <strong>1. On-chain — share_price sanity check (VaultMirror-A)</strong><br>
+      <code>VaultMirror-A</code> maintains a <code>last_known_share_price</code> field<br>
+      At confirm_settle, calculates implied share_price = total_deposit_usdc / total_shares_received<br>
+      If deviation from last_known_share_price > <code>max_price_deviation</code> (e.g., 5%), transaction reverts<br>
+      On success, updates last_known_share_price<br><br>
+
+      <strong>2. Off-chain — Operator provides proof materials</strong><br>
+      Operator must record before confirm: Sui Vault settle tx_hash, on-chain NAV snapshot at settle time<br>
+      This data is stored in off-chain audit logs (or IPFS) for post-hoc verification<br><br>
+
+      <strong>3. Time window — Prevent stale data</strong><br>
+      confirm_settle must complete within <code>max_settle_duration</code> (e.g., 72h) after freeze_epoch<br>
+      After timeout, Epoch automatically enters rollback-eligible state (Operator must manually rollback or confirm)
+    </div>
+  </div>
+
+  <div class="ibox">
+    <div class="ibox-t" style="color:#6ee7b7;">VaultMirror-A Extended Fields</div>
+    <div class="cblock"><span class="kw">pub struct</span> <span class="ty">VaultMirrorA</span> {
+    <span class="cm">// --- Base fields (original design) ---</span>
+    <span class="kw">pub</span> authority:              <span class="ty">Pubkey</span>,     <span class="cm">// multisig authority</span>
+    <span class="kw">pub</span> usdc_vault:              <span class="ty">Pubkey</span>,     <span class="cm">// USDC custody PDA</span>
+    <span class="kw">pub</span> current_epoch_id:        <span class="ty">u64</span>,
+    <span class="kw">pub</span> total_shares:            <span class="ty">u64</span>,       <span class="cm">// Sum of all user shares</span>
+    <span class="kw">pub</span> paused:                  <span class="ty">bool</span>,
+
+    <span class="cm">// --- v5 new: NAV protection ---</span>
+    <span class="kw">pub</span> last_known_share_price:  <span class="ty">u64</span>,       <span class="cm">// Last settle share_price (6 decimals)</span>
+    <span class="kw">pub</span> max_price_deviation_bps: <span class="ty">u16</span>,       <span class="cm">// Max allowed deviation (basis points, e.g., 500 = 5%)</span>
+    <span class="kw">pub</span> max_settle_duration:     <span class="ty">i64</span>,       <span class="cm">// Max time from freeze to confirm (seconds)</span>
+}</div>
+  </div>
+</div>
+
+<!-- ===== 8. Epoch USDC Accounting ===== -->
+<div class="sec sec-purple">
+  <h2>usdc_vault Fund Flow & Multi-Epoch Coexistence</h2>
+  <p style="font-size:12px; color:#94a3b8; margin-bottom:14px;">
+    usdc_vault is a unified USDC custody account that may simultaneously hold funds from multiple Epochs. Here is the fund isolation approach.
+  </p>
+
+  <div class="ibox">
+    <div class="ibox-t" style="color:#c084fc;">Core Principle: Logical Isolation, Physical Sharing</div>
+    <div class="ibox-d">
+      <code>usdc_vault</code> is a single PDA Token Account with one physical balance.<br>
+      Each Epoch tracks its own USDC inflow/outflow via its <code>SettleEpoch</code> account, achieving <strong>logical isolation</strong>.<br><br>
+
+      <strong>usdc_vault balance composition:</strong><br>
+      <code>balance = Σ(unbridged Epoch deposit USDC) + Σ(bridged-back redeem USDC pending claim) + Σ(rollback refunds)</code><br><br>
+
+      <strong>Invariant check:</strong><br>
+      After each Operator operation, the contract should verify:<br>
+      <code>usdc_vault.balance ≥ Σ(all users' claimable_usdc) + Σ(Open Epoch pending_deposit)</code><br>
+      If not satisfied → transaction reverts
+    </div>
+  </div>
+
+  <table class="dtable">
+    <thead>
+      <tr><th>Operation</th><th>usdc_vault Change</th><th>Epoch Record</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>deposit</code> (user)</td><td style="color:#6ee7b7;">+amount</td><td>epoch.total_deposit_usdc += amount</td></tr>
+      <tr><td><code>cancel_deposit</code> (user)</td><td style="color:#f87171;">-amount</td><td>epoch.total_deposit_usdc -= amount</td></tr>
+      <tr><td><code>freeze→bridging</code> (extract for bridging)</td><td style="color:#f87171;">-epoch.total_deposit_usdc</td><td>epoch.status = Bridging</td></tr>
+      <tr><td><code>confirm_redeem</code> (bridge back)</td><td style="color:#6ee7b7;">+total_usdc_received</td><td>epoch.total_usdc_received recorded</td></tr>
+      <tr><td><code>claim</code> (user)</td><td style="color:#f87171;">-user.claimable_usdc</td><td>No Epoch impact</td></tr>
+      <tr><td><code>rollback_epoch</code></td><td>Unchanged (or +bridged-back portion)</td><td>epoch.status = Failed</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ===== 9. Mixed Epoch Handling ===== -->
+<div class="sec sec-warn">
+  <h2>Same Epoch with Both Deposits and Redeems</h2>
+  <p style="font-size:12px; color:#94a3b8; margin-bottom:14px;">
+    A single Epoch may contain both user deposits and other users' redemptions. The strategy for mixed handling needs consideration.
+  </p>
+
+  <table class="dtable">
+    <thead>
+      <tr><th style="width:20%;">Strategy</th><th style="width:40%;">Description</th><th style="width:40%;">Evaluation</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td style="font-weight:600; color:#6ee7b7;">Option 1: Netting<br><span class="bg bg-rec">Recommended</span></td>
+        <td>Net deposits against redeems within an Epoch. E.g., deposit 3000 USDC + redeem 1000 shares can partially offset → only bridge the net amount cross-chain.</td>
+        <td style="color:#6ee7b7;">Reduces cross-chain transfers and fees, but Ledger Program logic is more complex; requires precise calculation of net_deposit_usdc and net_redeem_shares.</td>
+      </tr>
+      <tr>
+        <td style="font-weight:600; color:#67e8f9;">Option 2: Separate Processing</td>
+        <td>Deposits and redeems follow independent confirm flows. Each Epoch's deposits and redeems are settled separately.</td>
+        <td style="color:#67e8f9;">Simpler logic, but more cross-chain transfers. Suitable for initial version, can upgrade to Netting later.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="ibox">
+    <div class="ibox-t" style="color:#fbbf24;">Recommendation</div>
+    <div class="ibox-d">
+      <strong>Initial (v1): Separate Processing</strong> — confirm_deposit_settle and confirm_redeem_settle called independently, reducing development complexity.<br>
+      <strong>Later (v2): Introduce Netting</strong> — When transaction volume grows, Netting significantly reduces cross-chain costs (~$1-5 gas + wait time per transfer).
+    </div>
+  </div>
+</div>
+
+<!-- ===== 10. UserAccount Structure ===== -->
+<div class="sec sec-purple">
+  <h2>UserAccount Structure (Complete)</h2>
+  <div class="cblock"><span class="cm">// PDA seeds: [b"user", vault_mirror.key, wallet.key]</span>
+<span class="kw">pub struct</span> <span class="ty">UserAccount</span> {
+    <span class="kw">pub</span> wallet:                <span class="ty">Pubkey</span>,     <span class="cm">// User's Solana wallet (Crossmint)</span>
+    <span class="kw">pub</span> vault_mirror:          <span class="ty">Pubkey</span>,     <span class="cm">// Associated VaultMirror-A</span>
+
+    <span class="cm">// --- Fund state ---</span>
+    <span class="kw">pub</span> pending_deposit:       <span class="ty">u64</span>,       <span class="cm">// USDC deposited into usdc_vault but not yet settled</span>
+    <span class="kw">pub</span> pending_deposit_epoch: <span class="ty">u64</span>,       <span class="cm">// Epoch ID that pending_deposit belongs to</span>
+    <span class="kw">pub</span> confirmed_shares:      <span class="ty">u64</span>,       <span class="cm">// Confirmed Sui Vault shares</span>
+    <span class="kw">pub</span> pending_redeem_shares: <span class="ty">u64</span>,       <span class="cm">// Shares submitted for redeem but not yet settled</span>
+    <span class="kw">pub</span> pending_redeem_epoch:  <span class="ty">u64</span>,       <span class="cm">// Epoch ID that pending_redeem belongs to</span>
+    <span class="kw">pub</span> claimable_usdc:        <span class="ty">u64</span>,       <span class="cm">// USDC available for withdrawal (after settle or rollback)</span>
+
+    <span class="cm">// --- Historical stats ---</span>
+    <span class="kw">pub</span> total_deposited:       <span class="ty">u64</span>,       <span class="cm">// Cumulative USDC deposited</span>
+    <span class="kw">pub</span> total_redeemed:        <span class="ty">u64</span>,       <span class="cm">// Cumulative USDC redeemed</span>
+    <span class="kw">pub</span> total_shares_ever:     <span class="ty">u64</span>,       <span class="cm">// Cumulative shares received</span>
+
+    <span class="kw">pub</span> created_at:            <span class="ty">i64</span>,
+    <span class="kw">pub</span> last_action_at:        <span class="ty">i64</span>,
+}</div>
+
+  <div class="ibox">
+    <div class="ibox-t" style="color:#c084fc;">Constraint: One Unsettled Epoch at a Time</div>
+    <div class="ibox-d">
+      A user's <code>pending_deposit</code> and <code>pending_redeem_shares</code> can each only belong to one Epoch.<br>
+      If a user has pending_deposit in Epoch N, they cannot deposit again in Epoch N+1 (must wait for Epoch N to settle or rollback).<br><br>
+      <strong>Why?</strong><br>
+      · Simplifies share allocation logic: no need to track user pending state across multiple Epochs<br>
+      · Reduces contract complexity: UserAccount only needs to record one pending_deposit_epoch<br><br>
+      <strong>UX impact:</strong><br>
+      · If Epoch cycle is short (e.g., daily freeze), the restriction is acceptable<br>
+      · If Epoch cycle is long, may limit user flexibility → can consider supporting multi-Epoch pending later
+    </div>
+  </div>
+</div>
+
+<!-- ===== 11. Operator Workflow SOP ===== -->
+<div class="sec sec-warn">
+  <h2>Operator Daily Workflow SOP</h2>
+  <p style="font-size:12px; color:#94a3b8; margin-bottom:14px;">Assuming daily Epoch cycle (T). Below are the standard operating steps for each cycle.</p>
+
+  <table class="dtable">
+    <thead>
+      <tr><th style="width:10%;">Time</th><th style="width:15%;">Operation</th><th style="width:12%;">Chain</th><th style="width:63%;">Detailed Steps</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>T+0<br><span style="color:#64748b; font-size:10px;">Fixed daily time</span></td>
+        <td style="font-weight:600;">freeze_epoch</td>
+        <td><span style="color:#c084fc;">Solana</span></td>
+        <td>1. Check if current Epoch has any deposit/redeem<br>2. If yes → multisig freeze_epoch<br>3. If none → skip this cycle</td>
+      </tr>
+      <tr>
+        <td>T+0<br><span style="color:#64748b; font-size:10px;">Immediately after freeze</span></td>
+        <td style="font-weight:600;">CCTP Bridge</td>
+        <td><span style="color:#fcd34d;">Cross-chain</span></td>
+        <td>1. Extract total_deposit_usdc from usdc_vault<br>2. Call CCTP depositForBurn<br>3. Wait for attestation (~20min)<br>4. Sui side receiveMessage to collect USDC</td>
+      </tr>
+      <tr>
+        <td>T+0<br><span style="color:#64748b; font-size:10px;">After USDC arrives on Sui</span></td>
+        <td style="font-weight:600;">Sui Operations</td>
+        <td><span style="color:#67e8f9;">Sui</span></td>
+        <td>1. Pool address deposit USDC to Vault<br>2. Pool address queue_redeem shares (if redeems exist)<br>3. Wait for Sui Vault settle (depends on Vault's settle cycle)</td>
+      </tr>
+      <tr>
+        <td>T+N<br><span style="color:#64748b; font-size:10px;">After Sui settle completes</span></td>
+        <td style="font-weight:600;">Confirm & Bridge back</td>
+        <td><span style="color:#67e8f9;">Sui</span> → <span style="color:#c084fc;">Sol</span></td>
+        <td>1. Read Sui on-chain settle results (shares_received / usdc_claimable)<br>2. If redeems exist → claim USDC → CCTP bridge back to Solana<br>3. Solana multisig confirm_deposit_settle / confirm_redeem_settle<br>4. Record audit logs</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ===== 12. Remaining Questions ===== -->
+<div class="qsec">
+  <h3>Open Items (Streamlined)</h3>
+  <div class="qg">
+    <div class="qc qc-ok">
+      <div class="qc-no">A-1 · CONFIRMED</div>
+      <div class="qc-t">Bridge: Circle CCTP</div>
+      <div class="qc-d">Confirmed: CCTP. Permissionless, Standard Transfer zero protocol fee, mints Sui Native USDC, directly compatible with TBook Vault. Please verify Vault contract's accepted USDC token type.</div>
+      <span class="qtag qtag-d">Decided</span>
+    </div>
+    <div class="qc qc-h">
+      <div class="qc-no">A-2 · HIGH</div>
+      <div class="qc-t">Sui Vault Settle Cycle</div>
+      <div class="qc-d">Ledger Program's Epoch needs to align with Vault's settle rhythm. What is the current settle_interval? Who triggers settle? Fixed interval or manual?</div>
+      <span class="qtag qtag-o">Operations</span>
+    </div>
+    <div class="qc qc-m">
+      <div class="qc-no">A-3 · MEDIUM</div>
+      <div class="qc-t">CCTP V1 → V2 Migration Interface Changes</div>
+      <div class="qc-d">V1 sunset begins 2026-07-31, V2 expected 2026 H2 for Sui. Recommend Ledger Program abstracts Bridge interface for hot-swap. Will migration require service downtime?</div>
+      <span class="qtag qtag-a">Architecture</span>
+    </div>
+    <div class="qc qc-m">
+      <div class="qc-no">A-4 · MEDIUM</div>
+      <div class="qc-t">Ledger Program A Audit Plan</div>
+      <div class="qc-d">Program A manages user USDC in custody, requires security audit. Audit budget, timeline, auditor? Can codebase be shared with Program B?</div>
+      <span class="qtag qtag-a">Security</span>
+    </div>
+    <div class="qc qc-m">
+      <div class="qc-no">A-5 · MEDIUM</div>
+      <div class="qc-t">Initial Epoch Cycle Setting</div>
+      <div class="qc-d">Suggest starting with daily freeze, aligned with Sui Vault settle. Acceptable? If Vault settles more frequently (e.g., every 4h), should Epoch be shorter?</div>
+      <span class="qtag qtag-o">Operations</span>
+    </div>
+    <div class="qc qc-ok">
+      <div class="qc-no">A-6 · LOWER</div>
+      <div class="qc-t">Sui Multisig Key Management</div>
+      <div class="qc-d">Sui side uses existing MultiSigPanel. Confirm: M-of-N configuration? Same key holders as Solana side?</div>
+      <span class="qtag qtag-o">Operations</span>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>
